@@ -1,0 +1,183 @@
+{
+  "info": {
+    "_postman_id": "clinic-booking-api",
+    "name": "MedCare Clinic — Booking API Test",
+    "description": "Test n8n webhooks directly and via the Next.js proxy. Set the `n8n_url` and `nextjs_url` variables first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 — Direct n8n webhooks",
+      "item": [
+        {
+          "name": "New Booking (direct to n8n)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Patient\",\n  \"email\": \"test@example.com\",\n  \"phone\": \"01711000000\",\n  \"date\": \"2025-06-15\",\n  \"time\": \"14:00\",\n  \"appointmentType\": \"New Consultation\",\n  \"reason\": \"Headache and fever\",\n  \"age\": \"30\",\n  \"gender\": \"Male\",\n  \"notes\": \"First visit\",\n  \"consent\": true\n}"
+            },
+            "url": {
+              "raw": "{{n8n_url}}/webhook/new-booking",
+              "host": ["{{n8n_url}}"],
+              "path": ["webhook", "new-booking"]
+            },
+            "description": "Hit n8n directly. Make sure the '01 — New Booking' workflow is ACTIVE in n8n."
+          }
+        },
+        {
+          "name": "Reschedule (direct to n8n)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": \"BK-1234567890-001\",\n  \"email\": \"test@example.com\",\n  \"newDate\": \"2025-06-20\",\n  \"newTime\": \"16:00\",\n  \"reason\": \"Conflict with work\"\n}"
+            },
+            "url": {
+              "raw": "{{n8n_url}}/webhook/reschedule",
+              "host": ["{{n8n_url}}"],
+              "path": ["webhook", "reschedule"]
+            },
+            "description": "Hit n8n directly. Make sure the '04 — Reschedule' workflow is ACTIVE in n8n."
+          }
+        },
+        {
+          "name": "Get All Appointments (direct to n8n)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{n8n_url}}/webhook/admin/appointments",
+              "host": ["{{n8n_url}}"],
+              "path": ["webhook", "admin", "appointments"]
+            },
+            "description": "Hit n8n directly. Make sure the '06 — Admin & Doctor Panel API' workflow is ACTIVE."
+          }
+        },
+        {
+          "name": "Get Today's Appointments (direct to n8n)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{n8n_url}}/webhook/admin/appointments/today",
+              "host": ["{{n8n_url}}"],
+              "path": ["webhook", "admin", "appointments", "today"]
+            },
+            "description": "Hit n8n directly. Make sure the '06 — Admin & Doctor Panel API' workflow is ACTIVE."
+          }
+        },
+        {
+          "name": "Get Stats (direct to n8n)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{n8n_url}}/webhook/admin/stats",
+              "host": ["{{n8n_url}}"],
+              "path": ["webhook", "admin", "stats"]
+            },
+            "description": "Hit n8n directly. Make sure the '06 — Admin & Doctor Panel API' workflow is ACTIVE."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 — Via Next.js proxy",
+      "item": [
+        {
+          "name": "New Booking (via Next.js)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Patient\",\n  \"email\": \"test@example.com\",\n  \"phone\": \"01711000000\",\n  \"date\": \"2025-06-15\",\n  \"time\": \"14:00\",\n  \"appointmentType\": \"New Consultation\",\n  \"reason\": \"Headache and fever\",\n  \"age\": \"30\",\n  \"gender\": \"Male\",\n  \"notes\": \"First visit\",\n  \"consent\": true\n}"
+            },
+            "url": {
+              "raw": "{{nextjs_url}}/api/book",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "book"]
+            },
+            "description": "Goes through Next.js server → n8n. Same payload as direct call."
+          }
+        },
+        {
+          "name": "Reschedule (via Next.js)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": \"BK-1234567890-001\",\n  \"email\": \"test@example.com\",\n  \"newDate\": \"2025-06-20\",\n  \"newTime\": \"16:00\",\n  \"reason\": \"Conflict with work\"\n}"
+            },
+            "url": {
+              "raw": "{{nextjs_url}}/api/reschedule",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "reschedule"]
+            },
+            "description": "Goes through Next.js server → n8n."
+          }
+        },
+        {
+          "name": "Get All Appointments (via Next.js)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{nextjs_url}}/api/admin/appointments",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "admin", "appointments"]
+            }
+          }
+        },
+        {
+          "name": "Get Today's Appointments (via Next.js)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{nextjs_url}}/api/admin/appointments/today",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "admin", "appointments", "today"]
+            }
+          }
+        },
+        {
+          "name": "Get Stats (via Next.js)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{nextjs_url}}/api/admin/stats",
+              "host": ["{{nextjs_url}}"],
+              "path": ["api", "admin", "stats"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "n8n_url",
+      "value": "http://localhost:5678",
+      "type": "string"
+    },
+    {
+      "key": "nextjs_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}
