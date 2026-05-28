@@ -82,7 +82,7 @@ export async function GET() {
 
   try {
     const res = await fetch(`${N8N_URL}/webhook/admin/appointments/today`);
-    if (!res.ok) throw new Error("n8n returned error");
+    if (!res.ok) throw new Error(`n8n returned status ${res.status}`);
     const data = await res.json();
     
     let appointments = data.appointments || [];
@@ -90,27 +90,16 @@ export async function GET() {
     // Filter out invalid/empty items (e.g. doctor details or missing patient name)
     appointments = appointments.filter((appt: any) => appt && appt["Patient Name"] && appt["Booking ID"]);
     
-    // Merge live appointments with mock dataset for presentation
-    const mergedAppointments = [...appointments, ...mockData.appointments];
-    
-    // Deduplicate list by Booking ID / ID
-    const seen = new Set();
-    const finalAppointments = [];
-    for (const appt of mergedAppointments) {
-      const identifier = appt["Booking ID"] || appt.id;
-      if (!seen.has(identifier)) {
-        seen.add(identifier);
-        finalAppointments.push(appt);
-      }
-    }
-    
     return NextResponse.json({
-      appointments: finalAppointments,
-      upcoming: finalAppointments.filter((a: any) => a.Status !== "Completed" && a.Status !== "Cancelled" && a.Status !== "No-show").length,
-      total: finalAppointments.length
+      appointments,
+      upcoming: appointments.filter((a: any) => a.Status !== "Completed" && a.Status !== "Cancelled" && a.Status !== "No-show").length,
+      total: appointments.length
     });
   } catch (err) {
-    console.error("[API /api/admin/appointments/today] n8n lookup failed. Using fallback mock:", err);
-    return NextResponse.json(mockData);
+    console.error("[API /api/admin/appointments/today] n8n lookup failed:", err);
+    return NextResponse.json(
+      { success: false, message: err instanceof Error ? err.message : "Network error" },
+      { status: 500 }
+    );
   }
 }

@@ -31,13 +31,15 @@ export async function POST(req: NextRequest) {
     console.log("[API /api/booked-slots] n8n response:", data);
     return NextResponse.json(data);
   } catch (err) {
-    console.error("[API /api/booked-slots] error calling n8n, using fallback mock:", err);
-    return NextResponse.json(getMockBookings());
+    console.error("[API /api/booked-slots] error calling n8n:", err);
+    return NextResponse.json(
+      { success: false, message: err instanceof Error ? err.message : "Network error" },
+      { status: 500 }
+    );
   }
 }
 
 function getMockBookings() {
-  // Return some mock booked slots for testing purposes
   return [
     {
       "Booking ID": "BK-MOCK-9999",
