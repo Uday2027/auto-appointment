@@ -1,0 +1,110 @@
+{
+  "name": "05 — Daily Summary",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-8am",
+      "name": "Schedule — 8 AM Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "filterByFormula": "=AND(IS_SAME({Appointment Date}, TODAY(), 'day'), {Status}!='Cancelled')",
+        "sort": [
+          {
+            "field": "Appointment Time",
+            "direction": "asc"
+          }
+        ],
+        "options": {
+          "fields": ["Booking ID","Patient Name","Phone","Email","Appointment Time","Appointment Type","Status","Reason for Visit","Notes"]
+        }
+      },
+      "id": "airtable-todays-appointments",
+      "name": "Airtable — Get Today's Appointments",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst today = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });\n\nif (items.length === 0 || !items[0].json.fields) {\n  const html = `\n    <div style=\"font-family:Arial,sans-serif;max-width:700px;margin:0 auto\">\n      <div style=\"background:#2b6cb0;padding:20px;border-radius:10px 10px 0 0;text-align:center\">\n        <h2 style=\"color:#fff;margin:0\">📋 Daily Appointment Summary</h2>\n        <p style=\"color:#bee3f8;margin:4px 0 0\">${today}</p>\n      </div>\n      <div style=\"background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 10px 10px;text-align:center\">\n        <p style=\"color:#718096;font-size:16px\">No appointments scheduled for today.</p>\n      </div>\n    </div>`;\n  return [{ json: { html, count: 0, date: today } }];\n}\n\nconst statusColors = {\n  'Confirmed': '#276749',\n  'Booked': '#2b6cb0',\n  'Rescheduled': '#d69e2e',\n  'No-show': '#e53e3e',\n  'Completed': '#718096'\n};\n\nconst rows = items.map((item, index) => {\n  const f = item.json.fields;\n  const bgColor = index % 2 === 0 ? '#fff' : '#f7fafc';\n  const statusColor = statusColors[f.Status] || '#333';\n  return `\n    <tr style=\"background:${bgColor}\">\n      <td style=\"padding:12px 10px;font-weight:600\">${f['Appointment Time'] || '—'}</td>\n      <td style=\"padding:12px 10px\">${f['Patient Name'] || '—'}</td>\n      <td style=\"padding:12px 10px\">${f['Appointment Type'] || '—'}</td>\n      <td style=\"padding:12px 10px\">${f['Phone'] || '—'}</td>\n      <td style=\"padding:12px 10px\">${f['Reason for Visit'] ? f['Reason for Visit'].substring(0, 40) + '...' : '—'}</td>\n      <td style=\"padding:12px 10px\">\n        <span style=\"background:${statusColor};color:#fff;padding:3px 8px;border-radius:12px;font-size:12px\">${f.Status || '—'}</span>\n      </td>\n    </tr>`;\n}).join('');\n\nconst html = `\n  <div style=\"font-family:Arial,sans-serif;max-width:800px;margin:0 auto\">\n    <div style=\"background:#2b6cb0;padding:24px;border-radius:10px 10px 0 0;text-align:center\">\n      <h2 style=\"color:#fff;margin:0\">📋 Daily Appointment Summary</h2>\n      <p style=\"color:#bee3f8;margin:6px 0 0\">${today}</p>\n    </div>\n    <div style=\"background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 10px 10px\">\n      <p style=\"color:#333;margin-bottom:16px\">Total appointments today: <strong>${items.length}</strong></p>\n      <table style=\"width:100%;border-collapse:collapse;font-size:14px\">\n        <thead>\n          <tr style=\"background:#2b6cb0;color:#fff\">\n            <th style=\"padding:12px 10px;text-align:left\">Time</th>\n            <th style=\"padding:12px 10px;text-align:left\">Patient</th>\n            <th style=\"padding:12px 10px;text-align:left\">Type</th>\n            <th style=\"padding:12px 10px;text-align:left\">Phone</th>\n            <th style=\"padding:12px 10px;text-align:left\">Reason</th>\n            <th style=\"padding:12px 10px;text-align:left\">Status</th>\n          </tr>\n        </thead>\n        <tbody>${rows}</tbody>\n      </table>\n      <p style=\"color:#888;font-size:12px;margin-top:20px\">This is an automated daily summary from YOUR_CLINIC_NAME booking system.</p>\n    </div>\n  </div>`;\n\nreturn [{ json: { html, count: items.length, date: today } }];"
+      },
+      "id": "code-build-summary",
+      "name": "Code — Build Summary Table",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_STAFF_EMAIL",
+        "subject": "=📋 Today's Appointments — {{ $json.count }} scheduled ({{ $json.date }})",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "gmail-daily-summary",
+      "name": "Gmail — Send Daily Summary",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule — 8 AM Daily": {
+      "main": [
+        [{ "node": "Airtable — Get Today's Appointments", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — Get Today's Appointments": {
+      "main": [
+        [{ "node": "Code — Build Summary Table", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Build Summary Table": {
+      "main": [
+        [{ "node": "Gmail — Send Daily Summary", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_WORKFLOW_ID"
+  },
+  "tags": ["clinic", "daily-summary"]
+}

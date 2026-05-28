@@ -1,0 +1,321 @@
+{
+  "name": "04 \u2014 Reschedule",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reschedule",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-reschedule",
+      "name": "Webhook \u2014 Reschedule Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "reschedule"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate reschedule payload from query or body\nconst query = $input.item.json.query || {};\nconst body = $input.item.json.body || {};\nconst bookingId = query.bookingId || body.bookingId;\nconst email = query.email || body.email;\nconst newDate = query.newDate || body.newDate;\nconst newTime = query.newTime || body.newTime;\nconst reason = query.reason || body.reason || 'No reason provided';\n\nif (!bookingId || !email || !newDate || !newTime) {\n  throw new Error('Missing required fields: bookingId, email, newDate, newTime');\n}\n\n// Validate new date is not in the past\nconst parsedNewDate = new Date(newDate);\nconst today = new Date();\ntoday.setHours(0,0,0,0);\nif (parsedNewDate < today) {\n  throw new Error('New appointment date cannot be in the past');\n}\n\n// Build new datetime strings\nconst newStartDatetime = newDate + 'T' + newTime + ':00';\nconst newEndMs = new Date(newStartDatetime).getTime() + (20 * 60 * 1000);\nconst newEndDatetime = new Date(newEndMs).toISOString();\n\nreturn [{\n  json: {\n    bookingId,\n    email,\n    newDate,\n    newTime,\n    newStartDatetime,\n    newEndDatetime,\n    reason\n  }\n}];"
+      },
+      "id": "validate-reschedule",
+      "name": "Code \u2014 Validate Reschedule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "app2JpHihx47EnGFj",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblwoViU7bTwcDG3f",
+          "mode": "name"
+        },
+        "filterByFormula": "=AND({Booking ID}='{{ $json.bookingId }}', {Email}='{{ $json.email }}')",
+        "options": {
+          "maxRecords": 1
+        }
+      },
+      "id": "airtable-find-for-reschedule",
+      "name": "Airtable \u2014 Find Booking",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "EKnLtPZllfOJOMeH",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check the booking exists and is reschedulable\nconst records = $input.all();\nconst rescheduleData = $('Code \u2014 Validate Reschedule').item.json;\n\nif (!records || records.length === 0 || !records[0].json.fields) {\n  throw new Error('Booking not found: ' + rescheduleData.bookingId);\n}\n\nconst record = records[0].json;\nconst fields = record.fields;\n\nif (fields.Status === 'Cancelled' || fields.Status === 'Completed') {\n  throw new Error('Cannot reschedule a ' + fields.Status + ' appointment');\n}\n\n// Check 3 hour deadline\nconst currentApptDatetime = new Date(fields['Appointment Date'] + 'T' + fields['Appointment Time'] + ':00');\nconst hoursUntil = (currentApptDatetime.getTime() - Date.now()) / (1000 * 60 * 60);\n\nif (hoursUntil < 3) {\n  throw new Error('Cannot reschedule within 3 hours of appointment');\n}\n\nreturn [{\n  json: {\n    ...rescheduleData,\n    recordId: record.id,\n    fields,\n    calendarEventId: fields['Google Calendar Event ID'],\n    oldDate: fields['Appointment Date'],\n    oldTime: fields['Appointment Time']\n  }\n}];"
+      },
+      "id": "check-reschedulable",
+      "name": "Code \u2014 Check Reschedulable",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "app2JpHihx47EnGFj",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblwoViU7bTwcDG3f",
+          "mode": "name"
+        },
+        "id": "={{ $json.recordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Appointment Date": "={{ $json.newDate }}",
+            "Appointment Time": "={{ $json.newTime }}",
+            "Status": "Rescheduled",
+            "Reminder 24h Sent": false,
+            "Reminder 2h Sent": false,
+            "Reschedule Reason": "={{ $json.reason }}",
+            "Rescheduled At": "={{ new Date().toISOString() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-update-reschedule",
+      "name": "Airtable \u2014 Update Reschedule",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "EKnLtPZllfOJOMeH",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "2021331002@student.sust.edu",
+          "mode": "id"
+        },
+        "eventId": "={{ $('Code \u2014 Check Reschedulable').item.json.calendarEventId }}",
+        "updateFields": {
+          "start": "={{ $('Code \u2014 Check Reschedulable').item.json.newStartDatetime }}",
+          "end": "={{ $('Code \u2014 Check Reschedulable').item.json.newEndDatetime }}",
+          "description": "=Patient: {{ $('Code \u2014 Check Reschedulable').item.json.fields['Patient Name'] }}\nPhone: {{ $('Code \u2014 Check Reschedulable').item.json.fields['Phone'] }}\nEmail: {{ $('Code \u2014 Check Reschedulable').item.json.fields['Email'] }}\nType: {{ $('Code \u2014 Check Reschedulable').item.json.fields['Appointment Type'] }}\nReason for Visit: {{ $('Code \u2014 Check Reschedulable').item.json.fields['Reason for Visit'] }}\nStatus: Rescheduled\nPreviously: {{ $('Code \u2014 Check Reschedulable').item.json.oldDate }} at {{ $('Code \u2014 Check Reschedulable').item.json.oldTime }}"
+        }
+      },
+      "id": "google-calendar-update",
+      "name": "Google Calendar \u2014 Update Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        300
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "AKRCfZiIWgsuGXbr",
+          "name": "Google Calendar account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code \u2014 Check Reschedulable').item.json.fields.Email }}",
+        "subject": "=Appointment Rescheduled \u2014 Dr. YOUR_DOCTOR_NAME",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px\">\n  <div style=\"background:#2b6cb0;padding:20px;border-radius:10px 10px 0 0;text-align:center\">\n    <h2 style=\"color:#fff;margin:0\">\ud83d\udd04 Appointment Rescheduled</h2>\n  </div>\n  <div style=\"background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 10px 10px\">\n    <p>Dear <strong>{{ $('Code \u2014 Check Reschedulable').item.json.fields['Patient Name'] }}</strong>,</p>\n    <p>Your appointment has been successfully rescheduled.</p>\n    <table style=\"width:100%;border-collapse:collapse;margin:16px 0\">\n      <tr style=\"background:#f5f5f5\"><td colspan=\"2\" style=\"padding:10px;font-weight:700;color:#666\">Previous Appointment</td></tr>\n      <tr><td style=\"padding:8px 10px;color:#888\">Date</td><td style=\"padding:8px 10px;color:#888;text-decoration:line-through\">{{ $('Code \u2014 Check Reschedulable').item.json.oldDate }}</td></tr>\n      <tr><td style=\"padding:8px 10px;color:#888\">Time</td><td style=\"padding:8px 10px;color:#888;text-decoration:line-through\">{{ $('Code \u2014 Check Reschedulable').item.json.oldTime }}</td></tr>\n      <tr style=\"background:#ebf8ff\"><td colspan=\"2\" style=\"padding:10px;font-weight:700;color:#2b6cb0\">New Appointment</td></tr>\n      <tr><td style=\"padding:8px 10px;font-weight:600\">Date</td><td style=\"padding:8px 10px\">{{ $('Code \u2014 Check Reschedulable').item.json.newDate }}</td></tr>\n      <tr><td style=\"padding:8px 10px;font-weight:600\">Time</td><td style=\"padding:8px 10px\">{{ $('Code \u2014 Check Reschedulable').item.json.newTime }}</td></tr>\n      <tr><td style=\"padding:8px 10px;font-weight:600\">Doctor</td><td style=\"padding:8px 10px\">Dr. YOUR_DOCTOR_NAME</td></tr>\n      <tr><td style=\"padding:8px 10px;font-weight:600\">Location</td><td style=\"padding:8px 10px\">YOUR_CLINIC_ADDRESS</td></tr>\n    </table>\n    <p style=\"color:#888;font-size:13px\">Questions? Call YOUR_CLINIC_PHONE</p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "id": "gmail-reschedule-patient",
+      "name": "Gmail \u2014 Reschedule to Patient",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        200
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9Q9rWmagmsmXXiYR",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "2021331002@student.sust.edu",
+        "subject": "=\ud83d\udd04 Appointment Rescheduled \u2014 {{ $('Code \u2014 Check Reschedulable').item.json.fields['Patient Name'] }}",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,sans-serif\">\n  <h3 style=\"color:#2b6cb0\">Appointment Rescheduled</h3>\n  <p><strong>Patient:</strong> {{ $('Code \u2014 Check Reschedulable').item.json.fields['Patient Name'] }}</p>\n  <p><strong>Phone:</strong> {{ $('Code \u2014 Check Reschedulable').item.json.fields['Phone'] }}</p>\n  <p><strong>Old Date/Time:</strong> {{ $('Code \u2014 Check Reschedulable').item.json.oldDate }} at {{ $('Code \u2014 Check Reschedulable').item.json.oldTime }}</p>\n  <p><strong>New Date/Time:</strong> {{ $('Code \u2014 Check Reschedulable').item.json.newDate }} at {{ $('Code \u2014 Check Reschedulable').item.json.newTime }}</p>\n  <p><strong>Type:</strong> {{ $('Code \u2014 Check Reschedulable').item.json.fields['Appointment Type'] }}</p>\n  <p>Google Calendar has been updated automatically.</p>\n</div>",
+        "options": {}
+      },
+      "id": "gmail-reschedule-staff",
+      "name": "Gmail \u2014 Notify Staff of Reschedule",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        400
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9Q9rWmagmsmXXiYR",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"message\": \"Appointment rescheduled successfully\" }",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-rescheduled-ok",
+      "name": "Respond \u2014 Rescheduled OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook \u2014 Reschedule Request": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Validate Reschedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code \u2014 Validate Reschedule": {
+      "main": [
+        [
+          {
+            "node": "Airtable \u2014 Find Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable \u2014 Find Booking": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Check Reschedulable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code \u2014 Check Reschedulable": {
+      "main": [
+        [
+          {
+            "node": "Airtable \u2014 Update Reschedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable \u2014 Update Reschedule": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar \u2014 Update Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar \u2014 Update Event": {
+      "main": [
+        [
+          {
+            "node": "Gmail \u2014 Reschedule to Patient",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail \u2014 Notify Staff of Reschedule",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond \u2014 Rescheduled OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_WORKFLOW_ID"
+  },
+  "tags": [
+    "clinic",
+    "reschedule"
+  ]
+}

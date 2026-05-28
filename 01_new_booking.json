@@ -1,0 +1,281 @@
+{
+  "name": "01 — New Booking",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-booking",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-new-booking",
+      "name": "Webhook — New Booking",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "new-booking"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"message\": \"Appointment received\" }",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" },
+              { "name": "Access-Control-Allow-Headers", "value": "Content-Type" }
+            ]
+          }
+        }
+      },
+      "id": "respond-immediately",
+      "name": "Respond to Form",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate required fields\nconst body = $input.item.json.body;\nconst required = ['name','email','phone','date','time','appointmentType','reason','age','gender'];\nconst missing = required.filter(f => !body[f] || String(body[f]).trim() === '');\n\nif (missing.length > 0) {\n  throw new Error('Missing required fields: ' + missing.join(', '));\n}\n\n// Validate email format\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nif (!emailRegex.test(body.email)) {\n  throw new Error('Invalid email format: ' + body.email);\n}\n\n// Validate date is not in the past\nconst appointmentDate = new Date(body.date);\nconst today = new Date();\ntoday.setHours(0,0,0,0);\nif (appointmentDate < today) {\n  throw new Error('Appointment date cannot be in the past');\n}\n\n// Build combined datetime for Google Calendar\nconst startDatetime = body.date + 'T' + body.time + ':00';\nconst startMs = new Date(startDatetime).getTime();\nconst endMs = startMs + (20 * 60 * 1000); // 20 minute appointments\nconst endDatetime = new Date(endMs).toISOString();\n\n// Generate a unique booking ID\nconst bookingId = 'BK-' + Date.now() + '-' + Math.floor(Math.random() * 1000);\n\nreturn [{\n  json: {\n    ...body,\n    bookingId,\n    startDatetime,\n    endDatetime,\n    submittedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "validate-and-prepare",
+      "name": "Validate & Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Booking ID": "={{ $json.bookingId }}",
+            "Patient Name": "={{ $json.name }}",
+            "Email": "={{ $json.email }}",
+            "Phone": "={{ $json.phone }}",
+            "Appointment Date": "={{ $json.date }}",
+            "Appointment Time": "={{ $json.time }}",
+            "Appointment Type": "={{ $json.appointmentType }}",
+            "Reason for Visit": "={{ $json.reason }}",
+            "Age": "={{ $json.age }}",
+            "Gender": "={{ $json.gender }}",
+            "Notes": "={{ $json.notes }}",
+            "Status": "Booked",
+            "Confirmation Sent": false,
+            "Reminder 24h Sent": false,
+            "Reminder 2h Sent": false,
+            "Submitted At": "={{ $json.submittedAt }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-create",
+      "name": "Airtable — Create Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_CALENDAR_ID",
+          "mode": "id"
+        },
+        "start": "={{ $('Validate & Prepare Data').item.json.startDatetime }}",
+        "end": "={{ $('Validate & Prepare Data').item.json.endDatetime }}",
+        "additionalFields": {
+          "summary": "={{ $('Validate & Prepare Data').item.json.appointmentType + ' — ' + $('Validate & Prepare Data').item.json.name }}",
+          "description": "=Patient: {{ $('Validate & Prepare Data').item.json.name }}\nPhone: {{ $('Validate & Prepare Data').item.json.phone }}\nEmail: {{ $('Validate & Prepare Data').item.json.email }}\nAge: {{ $('Validate & Prepare Data').item.json.age }}\nGender: {{ $('Validate & Prepare Data').item.json.gender }}\nType: {{ $('Validate & Prepare Data').item.json.appointmentType }}\nReason: {{ $('Validate & Prepare Data').item.json.reason }}\nBooking ID: {{ $('Validate & Prepare Data').item.json.bookingId }}\nStatus: Booked",
+          "location": "YOUR_CLINIC_ADDRESS"
+        }
+      },
+      "id": "google-calendar-create",
+      "name": "Google Calendar — Create Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "id": "={{ $('Airtable — Create Record').item.json.id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Google Calendar Event ID": "={{ $json.id }}",
+            "Status": "Confirmed"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-update-calendar-id",
+      "name": "Airtable — Save Calendar Event ID",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Validate & Prepare Data').item.json.email }}",
+        "subject": "=Appointment Confirmed — Dr. YOUR_DOCTOR_NAME",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f9f9f9\">\n  <div style=\"background:#2b6cb0;padding:24px;border-radius:12px 12px 0 0;text-align:center\">\n    <h1 style=\"color:#fff;margin:0;font-size:22px\">✅ Appointment Confirmed</h1>\n  </div>\n  <div style=\"background:#fff;padding:28px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0\">\n    <p style=\"font-size:16px;color:#333\">Dear <strong>{{ $('Validate & Prepare Data').item.json.name }}</strong>,</p>\n    <p style=\"color:#555\">Your appointment has been successfully booked. Please review the details below:</p>\n    <table style=\"width:100%;border-collapse:collapse;margin:20px 0\">\n      <tr style=\"background:#ebf8ff\">\n        <td style=\"padding:10px 14px;font-weight:600;color:#2b6cb0;width:40%\">Doctor</td>\n        <td style=\"padding:10px 14px;color:#333\">Dr. YOUR_DOCTOR_NAME</td>\n      </tr>\n      <tr>\n        <td style=\"padding:10px 14px;font-weight:600;color:#2b6cb0\">Date</td>\n        <td style=\"padding:10px 14px;color:#333\">{{ $('Validate & Prepare Data').item.json.date }}</td>\n      </tr>\n      <tr style=\"background:#ebf8ff\">\n        <td style=\"padding:10px 14px;font-weight:600;color:#2b6cb0\">Time</td>\n        <td style=\"padding:10px 14px;color:#333\">{{ $('Validate & Prepare Data').item.json.time }}</td>\n      </tr>\n      <tr>\n        <td style=\"padding:10px 14px;font-weight:600;color:#2b6cb0\">Type</td>\n        <td style=\"padding:10px 14px;color:#333\">{{ $('Validate & Prepare Data').item.json.appointmentType }}</td>\n      </tr>\n      <tr style=\"background:#ebf8ff\">\n        <td style=\"padding:10px 14px;font-weight:600;color:#2b6cb0\">Clinic</td>\n        <td style=\"padding:10px 14px;color:#333\">YOUR_CLINIC_NAME</td>\n      </tr>\n      <tr>\n        <td style=\"padding:10px 14px;font-weight:600;color:#2b6cb0\">Address</td>\n        <td style=\"padding:10px 14px;color:#333\">YOUR_CLINIC_ADDRESS</td>\n      </tr>\n      <tr style=\"background:#ebf8ff\">\n        <td style=\"padding:10px 14px;font-weight:600;color:#2b6cb0\">Phone</td>\n        <td style=\"padding:10px 14px;color:#333\">YOUR_CLINIC_PHONE</td>\n      </tr>\n      <tr>\n        <td style=\"padding:10px 14px;font-weight:600;color:#2b6cb0\">Booking ID</td>\n        <td style=\"padding:10px 14px;color:#333\">{{ $('Validate & Prepare Data').item.json.bookingId }}</td>\n      </tr>\n    </table>\n    <div style=\"background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:14px;margin:20px 0\">\n      <p style=\"margin:0;color:#856404\">⚠️ Please arrive <strong>5 minutes early</strong>. Late arrival may affect your appointment slot.</p>\n    </div>\n    <p style=\"color:#555\">To manage your appointment:</p>\n    <div style=\"text-align:center;margin:20px 0\">\n      <a href=\"YOUR_N8N_BASE_URL/webhook/cancel?bookingId={{ $('Validate & Prepare Data').item.json.bookingId }}&email={{ $('Validate & Prepare Data').item.json.email }}\" style=\"background:#e53e3e;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;margin-right:10px;display:inline-block\">Cancel Appointment</a>\n      <a href=\"YOUR_NEXT_JS_URL/reschedule?bookingId={{ $('Validate & Prepare Data').item.json.bookingId }}\" style=\"background:#2b6cb0;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;display:inline-block\">Reschedule</a>\n    </div>\n    <hr style=\"border:none;border-top:1px solid #e2e8f0;margin:20px 0\">\n    <p style=\"color:#888;font-size:13px\">If you have questions, call us at <strong>YOUR_CLINIC_PHONE</strong></p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "id": "gmail-confirmation",
+      "name": "Gmail — Confirmation to Patient",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1340, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_STAFF_EMAIL",
+        "subject": "=🆕 New Booking — {{ $('Validate & Prepare Data').item.json.name }} ({{ $('Validate & Prepare Data').item.json.appointmentType }})",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:600px\">\n  <h2 style=\"color:#2b6cb0\">New Appointment Booked</h2>\n  <table style=\"width:100%;border-collapse:collapse\">\n    <tr><td style=\"padding:8px;font-weight:600\">Patient</td><td style=\"padding:8px\">{{ $('Validate & Prepare Data').item.json.name }}</td></tr>\n    <tr style=\"background:#f5f5f5\"><td style=\"padding:8px;font-weight:600\">Phone</td><td style=\"padding:8px\">{{ $('Validate & Prepare Data').item.json.phone }}</td></tr>\n    <tr><td style=\"padding:8px;font-weight:600\">Email</td><td style=\"padding:8px\">{{ $('Validate & Prepare Data').item.json.email }}</td></tr>\n    <tr style=\"background:#f5f5f5\"><td style=\"padding:8px;font-weight:600\">Date</td><td style=\"padding:8px\">{{ $('Validate & Prepare Data').item.json.date }}</td></tr>\n    <tr><td style=\"padding:8px;font-weight:600\">Time</td><td style=\"padding:8px\">{{ $('Validate & Prepare Data').item.json.time }}</td></tr>\n    <tr style=\"background:#f5f5f5\"><td style=\"padding:8px;font-weight:600\">Type</td><td style=\"padding:8px\">{{ $('Validate & Prepare Data').item.json.appointmentType }}</td></tr>\n    <tr><td style=\"padding:8px;font-weight:600\">Reason</td><td style=\"padding:8px\">{{ $('Validate & Prepare Data').item.json.reason }}</td></tr>\n    <tr style=\"background:#f5f5f5\"><td style=\"padding:8px;font-weight:600\">Age / Gender</td><td style=\"padding:8px\">{{ $('Validate & Prepare Data').item.json.age }} / {{ $('Validate & Prepare Data').item.json.gender }}</td></tr>\n    <tr><td style=\"padding:8px;font-weight:600\">Booking ID</td><td style=\"padding:8px\">{{ $('Validate & Prepare Data').item.json.bookingId }}</td></tr>\n  </table>\n  <p style=\"color:#888;font-size:12px\">This is an automated notification from YOUR_CLINIC_NAME booking system.</p>\n</div>",
+        "options": {}
+      },
+      "id": "gmail-staff-notify",
+      "name": "Gmail — Notify Staff",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1340, 400],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "id": "={{ $('Airtable — Create Record').item.json.id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Confirmation Sent": true
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-mark-confirmed",
+      "name": "Airtable — Mark Confirmation Sent",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1560, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook — New Booking": {
+      "main": [
+        [
+          { "node": "Respond to Form", "type": "main", "index": 0 },
+          { "node": "Validate & Prepare Data", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Validate & Prepare Data": {
+      "main": [
+        [{ "node": "Airtable — Create Record", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — Create Record": {
+      "main": [
+        [{ "node": "Google Calendar — Create Event", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Calendar — Create Event": {
+      "main": [
+        [{ "node": "Airtable — Save Calendar Event ID", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — Save Calendar Event ID": {
+      "main": [
+        [
+          { "node": "Gmail — Confirmation to Patient", "type": "main", "index": 0 },
+          { "node": "Gmail — Notify Staff", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Gmail — Confirmation to Patient": {
+      "main": [
+        [{ "node": "Airtable — Mark Confirmation Sent", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_WORKFLOW_ID"
+  },
+  "staticData": null,
+  "tags": ["clinic", "booking"],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

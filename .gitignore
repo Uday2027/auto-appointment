@@ -1,0 +1,8 @@
+# dependencies
+**/node_modules/
+clinic-frontend/node_modules/
+clinic-frontend/.next/
+clinic-frontend/.env*
+clinic-frontend/build/
+.DS_Store
+*.pem

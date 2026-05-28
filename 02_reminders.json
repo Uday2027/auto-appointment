@@ -1,0 +1,305 @@
+{
+  "name": "02 — Appointment Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule — Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "filterByFormula": "=AND(OR({Status}='Booked',{Status}='Confirmed'), {Reminder 24h Sent}=FALSE(), {Appointment Date}>=TODAY())",
+        "options": {
+          "fields": ["Booking ID","Patient Name","Email","Phone","Appointment Date","Appointment Time","Appointment Type","Status","Reminder 24h Sent","Reminder 2h Sent","Google Calendar Event ID"]
+        }
+      },
+      "id": "airtable-get-pending-24h",
+      "name": "Airtable — Get Pending 24h Reminders",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [460, 200],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "filterByFormula": "=AND(OR({Status}='Booked',{Status}='Confirmed'), {Reminder 24h Sent}=TRUE(), {Reminder 2h Sent}=FALSE(), {Appointment Date}>=TODAY())",
+        "options": {
+          "fields": ["Booking ID","Patient Name","Email","Phone","Appointment Date","Appointment Time","Appointment Type","Status","Reminder 24h Sent","Reminder 2h Sent"]
+        }
+      },
+      "id": "airtable-get-pending-2h",
+      "name": "Airtable — Get Pending 2h Reminders",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [460, 420],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if appointment is within the 24-hour window (22h to 25h from now)\nconst items = $input.all();\nconst now = new Date().getTime();\nconst WINDOW_MIN = 22 * 60 * 60 * 1000; // 22 hours\nconst WINDOW_MAX = 25 * 60 * 60 * 1000; // 25 hours\n\nconst ready = items.filter(item => {\n  const f = item.json.fields;\n  if (!f || !f['Appointment Date'] || !f['Appointment Time']) return false;\n  const apptDatetime = new Date(f['Appointment Date'] + 'T' + f['Appointment Time'] + ':00').getTime();\n  const diff = apptDatetime - now;\n  return diff >= WINDOW_MIN && diff <= WINDOW_MAX;\n});\n\nif (ready.length === 0) {\n  return [{ json: { skip: true, count: 0 } }];\n}\n\nreturn ready.map(item => ({ json: { ...item.json, _readyFor24h: true } }));"
+      },
+      "id": "check-24h-window",
+      "name": "Code — Check 24h Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if appointment is within 2-hour window (1h45m to 2h15m from now)\nconst items = $input.all();\nconst now = new Date().getTime();\nconst WINDOW_MIN = 1.75 * 60 * 60 * 1000; // 1h 45min\nconst WINDOW_MAX = 2.25 * 60 * 60 * 1000; // 2h 15min\n\nconst ready = items.filter(item => {\n  const f = item.json.fields;\n  if (!f || !f['Appointment Date'] || !f['Appointment Time']) return false;\n  const apptDatetime = new Date(f['Appointment Date'] + 'T' + f['Appointment Time'] + ':00').getTime();\n  const diff = apptDatetime - now;\n  return diff >= WINDOW_MIN && diff <= WINDOW_MAX;\n});\n\nif (ready.length === 0) {\n  return [{ json: { skip: true, count: 0 } }];\n}\n\nreturn ready.map(item => ({ json: { ...item.json, _readyFor2h: true } }));"
+      },
+      "id": "check-2h-window",
+      "name": "Code — Check 2h Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 420]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ]
+        }
+      },
+      "id": "if-24h-ready",
+      "name": "IF — 24h Appointments Ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ]
+        }
+      },
+      "id": "if-2h-ready",
+      "name": "IF — 2h Appointments Ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 420]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.fields.Email }}",
+        "subject": "=⏰ Reminder: Your Appointment Tomorrow — Dr. YOUR_DOCTOR_NAME",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px\">\n  <div style=\"background:#2b6cb0;padding:20px;border-radius:10px 10px 0 0;text-align:center\">\n    <h2 style=\"color:#fff;margin:0\">⏰ Appointment Reminder</h2>\n    <p style=\"color:#bee3f8;margin:6px 0 0\">Your appointment is tomorrow</p>\n  </div>\n  <div style=\"background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 10px 10px\">\n    <p>Dear <strong>{{ $json.fields['Patient Name'] }}</strong>,</p>\n    <p>This is a friendly reminder about your appointment tomorrow:</p>\n    <table style=\"width:100%;border-collapse:collapse;margin:16px 0\">\n      <tr style=\"background:#ebf8ff\"><td style=\"padding:10px;font-weight:600\">Doctor</td><td style=\"padding:10px\">Dr. YOUR_DOCTOR_NAME</td></tr>\n      <tr><td style=\"padding:10px;font-weight:600\">Date</td><td style=\"padding:10px\">{{ $json.fields['Appointment Date'] }}</td></tr>\n      <tr style=\"background:#ebf8ff\"><td style=\"padding:10px;font-weight:600\">Time</td><td style=\"padding:10px\">{{ $json.fields['Appointment Time'] }}</td></tr>\n      <tr><td style=\"padding:10px;font-weight:600\">Type</td><td style=\"padding:10px\">{{ $json.fields['Appointment Type'] }}</td></tr>\n      <tr style=\"background:#ebf8ff\"><td style=\"padding:10px;font-weight:600\">Location</td><td style=\"padding:10px\">YOUR_CLINIC_ADDRESS</td></tr>\n      <tr><td style=\"padding:10px;font-weight:600\">Contact</td><td style=\"padding:10px\">YOUR_CLINIC_PHONE</td></tr>\n    </table>\n    <div style=\"background:#f0fff4;border:1px solid #9ae6b4;border-radius:8px;padding:12px;margin:16px 0\">\n      <p style=\"margin:0;color:#276749\">✅ Please arrive 5 minutes early and bring any relevant medical reports.</p>\n    </div>\n    <div style=\"text-align:center;margin:20px 0\">\n      <a href=\"YOUR_N8N_BASE_URL/webhook/cancel?bookingId={{ $json.fields['Booking ID'] }}&email={{ $json.fields['Email'] }}\" style=\"background:#e53e3e;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block\">Cancel Appointment</a>\n    </div>\n    <p style=\"color:#888;font-size:12px\">Need to reschedule? Call us at YOUR_CLINIC_PHONE</p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "id": "gmail-24h-reminder",
+      "name": "Gmail — Send 24h Reminder",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1120, 140],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.fields.Email }}",
+        "subject": "=🔔 Your Appointment is in 2 Hours — Dr. YOUR_DOCTOR_NAME",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px\">\n  <div style=\"background:#d69e2e;padding:20px;border-radius:10px 10px 0 0;text-align:center\">\n    <h2 style=\"color:#fff;margin:0\">🔔 Appointment in 2 Hours!</h2>\n  </div>\n  <div style=\"background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 10px 10px\">\n    <p>Dear <strong>{{ $json.fields['Patient Name'] }}</strong>,</p>\n    <p>Your appointment is coming up in approximately <strong>2 hours</strong>. Please start getting ready.</p>\n    <table style=\"width:100%;border-collapse:collapse;margin:16px 0\">\n      <tr style=\"background:#fffbeb\"><td style=\"padding:10px;font-weight:600\">Doctor</td><td style=\"padding:10px\">Dr. YOUR_DOCTOR_NAME</td></tr>\n      <tr><td style=\"padding:10px;font-weight:600\">Time</td><td style=\"padding:10px\">{{ $json.fields['Appointment Time'] }}</td></tr>\n      <tr style=\"background:#fffbeb\"><td style=\"padding:10px;font-weight:600\">Location</td><td style=\"padding:10px\">YOUR_CLINIC_ADDRESS</td></tr>\n      <tr><td style=\"padding:10px;font-weight:600\">Contact</td><td style=\"padding:10px\">YOUR_CLINIC_PHONE</td></tr>\n    </table>\n    <p style=\"color:#888;font-size:12px\">If you cannot make it, please call us immediately at YOUR_CLINIC_PHONE</p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "id": "gmail-2h-reminder",
+      "name": "Gmail — Send 2h Reminder",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1120, 380],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "id": "={{ $('Gmail — Send 24h Reminder').item.json.id || $json.id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Reminder 24h Sent": true
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-mark-24h-sent",
+      "name": "Airtable — Mark 24h Sent",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1340, 140],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "id": "={{ $('Gmail — Send 2h Reminder').item.json.id || $json.id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Reminder 2h Sent": true
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-mark-2h-sent",
+      "name": "Airtable — Mark 2h Sent",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1340, 380],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule — Every 30 Minutes": {
+      "main": [
+        [
+          { "node": "Airtable — Get Pending 24h Reminders", "type": "main", "index": 0 },
+          { "node": "Airtable — Get Pending 2h Reminders", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Airtable — Get Pending 24h Reminders": {
+      "main": [
+        [{ "node": "Code — Check 24h Window", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — Get Pending 2h Reminders": {
+      "main": [
+        [{ "node": "Code — Check 2h Window", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Check 24h Window": {
+      "main": [
+        [{ "node": "IF — 24h Appointments Ready", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Check 2h Window": {
+      "main": [
+        [{ "node": "IF — 2h Appointments Ready", "type": "main", "index": 0 }]
+      ]
+    },
+    "IF — 24h Appointments Ready": {
+      "main": [
+        [{ "node": "Gmail — Send 24h Reminder", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "IF — 2h Appointments Ready": {
+      "main": [
+        [{ "node": "Gmail — Send 2h Reminder", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Gmail — Send 24h Reminder": {
+      "main": [
+        [{ "node": "Airtable — Mark 24h Sent", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gmail — Send 2h Reminder": {
+      "main": [
+        [{ "node": "Airtable — Mark 2h Sent", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_WORKFLOW_ID"
+  },
+  "tags": ["clinic", "reminders"]
+}

@@ -1,0 +1,59 @@
+{
+  "name": "00 — Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format the error into a readable message\nconst error = $input.item.json;\n\nconst workflowName = error.workflow?.name || 'Unknown Workflow';\nconst errorMessage = error.execution?.error?.message || 'Unknown error';\nconst errorStack = error.execution?.error?.stack || '';\nconst executionId = error.execution?.id || 'N/A';\nconst timestamp = new Date().toLocaleString('en-GB');\nconst nodeWhereFailed = error.execution?.lastNodeExecuted || 'Unknown node';\n\nreturn [{\n  json: {\n    workflowName,\n    errorMessage,\n    errorStack,\n    executionId,\n    timestamp,\n    nodeWhereFailed\n  }\n}];"
+      },
+      "id": "format-error",
+      "name": "Code — Format Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_ADMIN_EMAIL",
+        "subject": "=⚠️ n8n Error — {{ $json.workflowName }}",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:600px\">\n  <div style=\"background:#e53e3e;padding:20px;border-radius:10px 10px 0 0\">\n    <h2 style=\"color:#fff;margin:0\">⚠️ Automation Error</h2>\n    <p style=\"color:#fed7d7;margin:4px 0 0\">{{ $json.timestamp }}</p>\n  </div>\n  <div style=\"background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 10px 10px\">\n    <table style=\"width:100%;border-collapse:collapse\">\n      <tr style=\"background:#fff5f5\"><td style=\"padding:10px;font-weight:600;width:40%\">Workflow</td><td style=\"padding:10px\">{{ $json.workflowName }}</td></tr>\n      <tr><td style=\"padding:10px;font-weight:600\">Failed at Node</td><td style=\"padding:10px\">{{ $json.nodeWhereFailed }}</td></tr>\n      <tr style=\"background:#fff5f5\"><td style=\"padding:10px;font-weight:600\">Error</td><td style=\"padding:10px;color:#e53e3e\">{{ $json.errorMessage }}</td></tr>\n      <tr><td style=\"padding:10px;font-weight:600\">Execution ID</td><td style=\"padding:10px\">{{ $json.executionId }}</td></tr>\n    </table>\n    <div style=\"background:#f5f5f5;padding:14px;border-radius:8px;margin-top:16px\">\n      <p style=\"margin:0;font-size:12px;font-family:monospace;color:#666\">{{ $json.errorStack }}</p>\n    </div>\n    <p style=\"color:#888;font-size:13px;margin-top:16px\">Check your n8n execution history for details.</p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "id": "gmail-error-alert",
+      "name": "Gmail — Error Alert to Admin",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [{ "node": "Code — Format Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Format Error": {
+      "main": [
+        [{ "node": "Gmail — Error Alert to Admin", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["clinic", "error-handling"]
+}

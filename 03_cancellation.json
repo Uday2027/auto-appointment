@@ -1,0 +1,256 @@
+{
+  "name": "03 — Cancellation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "cancel",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-cancel",
+      "name": "Webhook — Cancel Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "cancel"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract bookingId, email, and reason from query or body\nconst query = $input.item.json.query || {};\nconst body = $input.item.json.body || {};\nconst bookingId = query.bookingId || body.bookingId;\nconst email = query.email || body.email;\nconst reason = query.reason || body.reason || 'Patient requested cancellation';\n\nif (!bookingId || !email) {\n  throw new Error('Missing bookingId or email in cancellation request');\n}\n\nreturn [{ json: { bookingId, email, reason } }];"
+      },
+      "id": "extract-cancel-params",
+      "name": "Code — Extract Cancel Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "filterByFormula": "=AND({Booking ID}='{{ $json.bookingId }}', {Email}='{{ $json.email }}')",
+        "options": {
+          "maxRecords": 1
+        }
+      },
+      "id": "airtable-find-booking",
+      "name": "Airtable — Find Booking",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if booking exists and is cancellable\nconst records = $input.all();\n\nif (!records || records.length === 0 || !records[0].json.fields) {\n  return [{ json: { canCancel: false, reason: 'Booking not found', record: null } }];\n}\n\nconst record = records[0].json;\nconst fields = record.fields;\n\n// Cannot cancel already cancelled bookings\nif (fields.Status === 'Cancelled' || fields.Status === 'Completed') {\n  return [{ json: { canCancel: false, reason: 'Booking is already ' + fields.Status, record, fields } }];\n}\n\n// Check 3-hour cancellation deadline\nconst appointmentDatetime = new Date(fields['Appointment Date'] + 'T' + fields['Appointment Time'] + ':00');\nconst now = new Date();\nconst hoursUntilAppt = (appointmentDatetime.getTime() - now.getTime()) / (1000 * 60 * 60);\n\nif (hoursUntilAppt < 3) {\n  return [{ \n    json: { \n      canCancel: false, \n      reason: 'Cancellation deadline passed. Appointments cannot be cancelled within 3 hours.', \n      record, \n      fields,\n      hoursUntilAppt: hoursUntilAppt.toFixed(1)\n    } \n  }];\n}\n\nreturn [{ json: { canCancel: true, reason: 'OK', record, fields, recordId: record.id } }];"
+      },
+      "id": "check-cancellation-deadline",
+      "name": "Code — Check Deadline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "leftValue": "={{ $json.canCancel }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "if-can-cancel",
+      "name": "IF — Can Cancel?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "html",
+        "responseBody": "=<html><body style=\"font-family:Arial;text-align:center;padding:60px;background:#fff5f5\"><h2 style=\"color:#e53e3e\">❌ Cannot Cancel</h2><p style=\"color:#555\">{{ $json.reason }}</p><p>Please call us at <strong>YOUR_CLINIC_PHONE</strong></p></body></html>",
+        "options": { "responseCode": 400 }
+      },
+      "id": "respond-cannot-cancel",
+      "name": "Respond — Cannot Cancel",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 440]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "id": "={{ $json.recordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Cancelled",
+            "Cancellation Reason": "={{ $('Code — Extract Cancel Params').item.json.reason || 'Patient requested cancellation' }}",
+            "Cancelled At": "={{ new Date().toISOString() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-mark-cancelled",
+      "name": "Airtable — Mark Cancelled",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1340, 160],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_CALENDAR_ID",
+          "mode": "id"
+        },
+        "eventId": "={{ $('Code — Check Deadline').item.json.fields['Google Calendar Event ID'] }}"
+      },
+      "id": "google-calendar-delete",
+      "name": "Google Calendar — Delete Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1560, 160],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code — Check Deadline').item.json.fields.Email }}",
+        "subject": "Appointment Cancelled — YOUR_CLINIC_NAME",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px\">\n  <div style=\"background:#e53e3e;padding:20px;border-radius:10px 10px 0 0;text-align:center\">\n    <h2 style=\"color:#fff;margin:0\">Appointment Cancelled</h2>\n  </div>\n  <div style=\"background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 10px 10px\">\n    <p>Dear <strong>{{ $('Code — Check Deadline').item.json.fields['Patient Name'] }}</strong>,</p>\n    <p>Your appointment has been successfully cancelled.</p>\n    <table style=\"width:100%;border-collapse:collapse;margin:16px 0\">\n      <tr style=\"background:#fff5f5\"><td style=\"padding:10px;font-weight:600\">Date</td><td style=\"padding:10px\">{{ $('Code — Check Deadline').item.json.fields['Appointment Date'] }}</td></tr>\n      <tr><td style=\"padding:10px;font-weight:600\">Time</td><td style=\"padding:10px\">{{ $('Code — Check Deadline').item.json.fields['Appointment Time'] }}</td></tr>\n      <tr style=\"background:#fff5f5\"><td style=\"padding:10px;font-weight:600\">Type</td><td style=\"padding:10px\">{{ $('Code — Check Deadline').item.json.fields['Appointment Type'] }}</td></tr>\n    </table>\n    <p>To book a new appointment, visit: <a href=\"YOUR_NEXT_JS_URL\">YOUR_CLINIC_NAME Booking</a></p>\n    <p style=\"color:#888;font-size:13px\">Questions? Call YOUR_CLINIC_PHONE</p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "id": "gmail-cancellation-patient",
+      "name": "Gmail — Cancellation to Patient",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1780, 100],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_STAFF_EMAIL",
+        "subject": "=❌ Appointment Cancelled — {{ $('Code — Check Deadline').item.json.fields['Patient Name'] }}",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,sans-serif\">\n  <h3 style=\"color:#e53e3e\">Appointment Cancelled</h3>\n  <p><strong>Patient:</strong> {{ $('Code — Check Deadline').item.json.fields['Patient Name'] }}</p>\n  <p><strong>Phone:</strong> {{ $('Code — Check Deadline').item.json.fields['Phone'] }}</p>\n  <p><strong>Date:</strong> {{ $('Code — Check Deadline').item.json.fields['Appointment Date'] }}</p>\n  <p><strong>Time:</strong> {{ $('Code — Check Deadline').item.json.fields['Appointment Time'] }}</p>\n  <p><strong>Type:</strong> {{ $('Code — Check Deadline').item.json.fields['Appointment Type'] }}</p>\n  <p style=\"color:#e53e3e\">This slot is now available for another patient.</p>\n</div>",
+        "options": {}
+      },
+      "id": "gmail-cancellation-staff",
+      "name": "Gmail — Notify Staff of Cancellation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1780, 260],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GOOGLE_CREDENTIAL_ID",
+          "name": "Google — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "html",
+        "responseBody": "<html><body style=\"font-family:Arial;text-align:center;padding:60px;background:#f0fff4\"><h2 style=\"color:#276749\">✅ Appointment Cancelled</h2><p style=\"color:#555\">Your appointment has been successfully cancelled. A confirmation email has been sent.</p><p>To book again, visit <a href=\"YOUR_NEXT_JS_URL\">our booking page</a>.</p></body></html>",
+        "options": {}
+      },
+      "id": "respond-cancelled-ok",
+      "name": "Respond — Cancelled OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1780, 420]
+    }
+  ],
+  "connections": {
+    "Webhook — Cancel Request": {
+      "main": [
+        [{ "node": "Code — Extract Cancel Params", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Extract Cancel Params": {
+      "main": [
+        [{ "node": "Airtable — Find Booking", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — Find Booking": {
+      "main": [
+        [{ "node": "Code — Check Deadline", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Check Deadline": {
+      "main": [
+        [{ "node": "IF — Can Cancel?", "type": "main", "index": 0 }]
+      ]
+    },
+    "IF — Can Cancel?": {
+      "main": [
+        [{ "node": "Airtable — Mark Cancelled", "type": "main", "index": 0 }],
+        [{ "node": "Respond — Cannot Cancel", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — Mark Cancelled": {
+      "main": [
+        [{ "node": "Google Calendar — Delete Event", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Calendar — Delete Event": {
+      "main": [
+        [
+          { "node": "Gmail — Cancellation to Patient", "type": "main", "index": 0 },
+          { "node": "Gmail — Notify Staff of Cancellation", "type": "main", "index": 0 },
+          { "node": "Respond — Cancelled OK", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_WORKFLOW_ID"
+  },
+  "tags": ["clinic", "cancellation"]
+}

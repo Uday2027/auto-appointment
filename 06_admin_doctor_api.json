@@ -1,0 +1,373 @@
+{
+  "name": "06 — Admin & Doctor Panel API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "admin/appointments",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-admin-list",
+      "name": "Webhook — Get All Appointments",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 120],
+      "webhookId": "admin-appointments"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "admin/appointments/today",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-today",
+      "name": "Webhook — Get Today's Appointments",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 280],
+      "webhookId": "admin-today"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "admin/status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-update-status",
+      "name": "Webhook — Update Appointment Status",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 440],
+      "webhookId": "admin-status"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "admin/stats",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-stats",
+      "name": "Webhook — Get Stats",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 600],
+      "webhookId": "admin-stats"
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "sort": [
+          { "field": "Appointment Date", "direction": "desc" },
+          { "field": "Appointment Time", "direction": "asc" }
+        ],
+        "options": {
+          "maxRecords": 200
+        }
+      },
+      "id": "airtable-list-all",
+      "name": "Airtable — List All Appointments",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [460, 120],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "filterByFormula": "=IS_SAME({Appointment Date}, TODAY(), 'day')",
+        "sort": [
+          { "field": "Appointment Time", "direction": "asc" }
+        ],
+        "options": {}
+      },
+      "id": "airtable-list-today",
+      "name": "Airtable — List Today",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [460, 280],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate status update from admin/doctor panel\n// Allowed statuses: Confirmed, Completed, No-show, Cancelled\nconst body = $input.item.json.body;\n\nconst allowedStatuses = ['Confirmed', 'Completed', 'No-show', 'Cancelled', 'Booked', 'Rescheduled'];\n\nif (!body.recordId) throw new Error('recordId is required');\nif (!body.status) throw new Error('status is required');\nif (!allowedStatuses.includes(body.status)) {\n  throw new Error('Invalid status. Must be one of: ' + allowedStatuses.join(', '));\n}\n\nreturn [{ json: { recordId: body.recordId, status: body.status, notes: body.notes || '' } }];"
+      },
+      "id": "validate-status-update",
+      "name": "Code — Validate Status Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 440]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "options": {
+          "maxRecords": 500
+        }
+      },
+      "id": "airtable-all-for-stats",
+      "name": "Airtable — All For Stats",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [460, 600],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format all appointments for admin panel\nconst items = $input.all();\nconst appointments = items\n  .filter(i => i.json.fields)\n  .map(i => ({\n    id: i.json.id,\n    ...i.json.fields\n  }));\n\nreturn [{ json: { appointments, total: appointments.length } }];"
+      },
+      "id": "format-all-appointments",
+      "name": "Code — Format All Appointments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format today's appointments for doctor panel\nconst items = $input.all();\nconst appointments = items\n  .filter(i => i.json.fields)\n  .map(i => ({\n    id: i.json.id,\n    ...i.json.fields\n  }));\n\nconst now = new Date();\nconst upcoming = appointments.filter(a => {\n  if (!a['Appointment Time']) return false;\n  const apptTime = new Date(a['Appointment Date'] + 'T' + a['Appointment Time'] + ':00');\n  return apptTime >= now;\n});\n\nreturn [{ json: { appointments, upcoming: upcoming.length, total: appointments.length } }];"
+      },
+      "id": "format-today-appointments",
+      "name": "Code — Format Today",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 280]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Appointments",
+          "mode": "name"
+        },
+        "id": "={{ $json.recordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "={{ $json.status }}",
+            "Admin Notes": "={{ $json.notes }}",
+            "Updated At": "={{ new Date().toISOString() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-update-status",
+      "name": "Airtable — Update Status",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [680, 440],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable — Clinic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build stats for admin dashboard\nconst items = $input.all();\nconst fields = items.filter(i => i.json.fields).map(i => i.json.fields);\n\nconst stats = {\n  total: fields.length,\n  booked: fields.filter(f => f.Status === 'Booked').length,\n  confirmed: fields.filter(f => f.Status === 'Confirmed').length,\n  completed: fields.filter(f => f.Status === 'Completed').length,\n  cancelled: fields.filter(f => f.Status === 'Cancelled').length,\n  noShow: fields.filter(f => f.Status === 'No-show').length,\n  rescheduled: fields.filter(f => f.Status === 'Rescheduled').length,\n  byType: {\n    newConsultation: fields.filter(f => f['Appointment Type'] === 'New Consultation').length,\n    followUp: fields.filter(f => f['Appointment Type'] === 'Follow-up').length,\n    reportReview: fields.filter(f => f['Appointment Type'] === 'Report Review').length,\n    emergency: fields.filter(f => f['Appointment Type'] === 'Emergency / Urgent').length\n  }\n};\n\nreturn [{ json: stats }];"
+      },
+      "id": "code-build-stats",
+      "name": "Code — Build Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "respond-all-appointments",
+      "name": "Respond — All Appointments",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "respond-today",
+      "name": "Respond — Today",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 280]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"status\": \"{{ $('Airtable — Update Status').item.json.fields.Status }}\" }",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "respond-status-updated",
+      "name": "Respond — Status Updated",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 440]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "respond-stats",
+      "name": "Respond — Stats",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 600]
+    }
+  ],
+  "connections": {
+    "Webhook — Get All Appointments": {
+      "main": [
+        [{ "node": "Airtable — List All Appointments", "type": "main", "index": 0 }]
+      ]
+    },
+    "Webhook — Get Today's Appointments": {
+      "main": [
+        [{ "node": "Airtable — List Today", "type": "main", "index": 0 }]
+      ]
+    },
+    "Webhook — Update Appointment Status": {
+      "main": [
+        [{ "node": "Code — Validate Status Update", "type": "main", "index": 0 }]
+      ]
+    },
+    "Webhook — Get Stats": {
+      "main": [
+        [{ "node": "Airtable — All For Stats", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — List All Appointments": {
+      "main": [
+        [{ "node": "Code — Format All Appointments", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — List Today": {
+      "main": [
+        [{ "node": "Code — Format Today", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Validate Status Update": {
+      "main": [
+        [{ "node": "Airtable — Update Status", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — All For Stats": {
+      "main": [
+        [{ "node": "Code — Build Stats", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Format All Appointments": {
+      "main": [
+        [{ "node": "Respond — All Appointments", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Format Today": {
+      "main": [
+        [{ "node": "Respond — Today", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — Update Status": {
+      "main": [
+        [{ "node": "Respond — Status Updated", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code — Build Stats": {
+      "main": [
+        [{ "node": "Respond — Stats", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_WORKFLOW_ID"
+  },
+  "tags": ["clinic", "admin", "api"]
+}
