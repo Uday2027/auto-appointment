@@ -4,14 +4,16 @@ const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "";
 const isMock = !N8N_URL || N8N_URL.includes("YOUR_N8N_BASE_URL");
 
 export async function POST(req: NextRequest) {
+  let doctors: any[] = [];
   try {
     const body = await req.json();
+    doctors = body.doctors || [];
     console.log("[API /api/availability] received:", body);
 
     if (isMock) {
       console.log("[API /api/availability] MOCK MODE");
       await new Promise((r) => setTimeout(r, 600));
-      return NextResponse.json(getMockAvailability(body.doctors?.[0]?.id || ""));
+      return NextResponse.json(getMockAvailability(doctors?.[0]?.id || ""));
     }
 
     const n8nEndpoint = `${N8N_URL}/webhook-test/availability`;
@@ -43,8 +45,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data);
   } catch (err) {
     console.error("[API /api/availability] error calling n8n, using fallback mock:", err);
-    const body = await req.json().catch(() => ({}));
-    return NextResponse.json(getMockAvailability(body.doctors?.[0]?.id || ""));
+    // Use the parsed doctors array cached from the try block to avoid re-reading the consumed request stream
+    return NextResponse.json(getMockAvailability(doctors?.[0]?.id || ""));
   }
 }
 

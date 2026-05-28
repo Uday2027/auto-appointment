@@ -4,9 +4,10 @@ const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "";
 const isMock = !N8N_URL || N8N_URL.includes("YOUR_N8N_BASE_URL");
 
 export async function POST(req: NextRequest) {
+  let problem = "";
   try {
     const body = await req.json();
-    const problem = body.Problem || "";
+    problem = body.Problem || "";
     console.log("[API /api/available-doctors] received:", body);
 
     if (isMock) {
@@ -33,9 +34,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data);
   } catch (err) {
     console.error("[API /api/available-doctors] error calling n8n, using fallback mock:", err);
-    // Return mock as fallback to ensure the frontend doesn't break if n8n is not running
-    const body = await req.json().catch(() => ({}));
-    return NextResponse.json(getMockDoctor(body.Problem || ""));
+    // Return mock as fallback to ensure the frontend doesn't break if n8n is not running or is unreachable
+    return NextResponse.json(getMockDoctor(problem));
   }
 }
 
