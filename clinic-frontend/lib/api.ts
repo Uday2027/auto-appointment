@@ -72,4 +72,9 @@ export async function fetchBookedSlots(params: { "Day of Week": string; "Start T
   return apiPost("/api/booked-slots", params);
 }
 
+export async function lookupAppointment(bookingId: string, email: string) {
+  return apiPost("/api/reschedule/lookup", { bookingId, email });
+}
+
+
 
