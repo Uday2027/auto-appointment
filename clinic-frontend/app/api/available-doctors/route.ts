@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchN8N } from "@/lib/server-api";
+import { fetchN8N, safeJson } from "@/lib/server-api";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,12 +13,8 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({ Problem: problem }),
     });
 
-    if (!res.ok) {
-      throw new Error(`n8n returned status ${res.status}`);
-    }
-
-    const data = await res.json();
-    console.log("[API /api/available-doctors] n8n response:", data);
+    const data = await safeJson(res);
+    console.log("[API /api/available-doctors] processed response:", data);
     return NextResponse.json(data);
   } catch (err) {
     console.error("[API /api/available-doctors] error calling n8n:", err);
