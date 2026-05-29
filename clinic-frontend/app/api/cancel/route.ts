@@ -23,12 +23,15 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    const data = await res.json().catch(() => ({
-      success: false,
-      message: "Invalid response from n8n",
-    }));
+    const text = await res.text();
+    console.log("[API /api/cancel] raw response:", text);
 
-    console.log("[API /api/cancel] n8n status:", res.status, "n8n response:", data);
+    let data: any;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (parseErr) {
+      data = { success: false, message: `Invalid JSON response: ${text}` };
+    }
 
     if (!res.ok) {
       let errorMessage = "Cancellation failed";

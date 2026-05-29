@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchN8N } from "@/lib/server-api";
+import { fetchN8N, safeJson } from "@/lib/server-api";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,11 +10,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    if (!res.ok) {
-      throw new Error(`n8n returned status ${res.status}`);
-    }
-
-    const data = await res.json();
+    const data = await safeJson(res);
     return NextResponse.json(data);
   } catch (err) {
     console.error("[API /api/admin/status] error completing session:", err);

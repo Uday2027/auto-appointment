@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { fetchN8N } from "@/lib/server-api";
+import { fetchN8N, safeJson } from "@/lib/server-api";
 
 export async function GET() {
   try {
     const res = await fetchN8N("admin/appointments", {
       method: "GET",
     });
-    if (!res.ok) throw new Error(`n8n returned status ${res.status}`);
-    const data = await res.json();
+    const data = await safeJson(res);
     
     let appointments = data.appointments || [];
     

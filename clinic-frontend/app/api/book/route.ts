@@ -12,12 +12,15 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    const data = await res.json().catch(() => ({
-      success: false,
-      message: "Invalid response from n8n",
-    }));
+    const text = await res.text();
+    console.log("[API /api/book] raw response:", text);
 
-    console.log("[API /api/book] n8n status:", res.status, "n8n response:", data);
+    let data: any;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (parseErr) {
+      data = { success: false, message: `Invalid JSON response: ${text}` };
+    }
 
     if (!res.ok) {
       return NextResponse.json(
