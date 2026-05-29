@@ -1,31 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "http://localhost:5678";
+import { fetchN8N } from "@/lib/server-api";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     console.log("[API /api/availability] received:", body);
 
-    const n8nEndpoint = `${N8N_URL}/webhook-test/availability`;
-    console.log("[API /api/availability] forwarding to n8n:", n8nEndpoint);
-
-    let res = await fetch(n8nEndpoint, {
+    const res = await fetchN8N("availability", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
-    // If webhook-test fails, try production webhook endpoint as fallback
-    if (!res.ok) {
-      const prodEndpoint = `${N8N_URL}/webhook/availability`;
-      console.log("[API /api/availability] webhook-test failed. Trying production:", prodEndpoint);
-      res = await fetch(prodEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    }
 
     if (!res.ok) {
       throw new Error(`n8n returned status ${res.status}`);

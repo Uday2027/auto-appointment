@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-
-const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "http://localhost:5678";
+import { fetchN8N } from "@/lib/server-api";
 
 export async function GET() {
   try {
-    const res = await fetch(`${N8N_URL}/webhook/admin/appointments`);
+    const res = await fetchN8N("admin/appointments", {
+      method: "GET",
+    });
     if (!res.ok) throw new Error(`n8n returned status ${res.status}`);
     const data = await res.json();
     

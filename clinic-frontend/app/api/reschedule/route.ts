@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "http://localhost:5678";
+import { fetchN8N } from "@/lib/server-api";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,10 +13,9 @@ export async function POST(req: NextRequest) {
       newTime: body.newTime || "",
       reason: body.reason || "",
     });
-    const n8nEndpoint = `${N8N_URL}/webhook/reschedule?${queryParams.toString()}`;
-    console.log("[API /api/reschedule] forwarding to n8n:", n8nEndpoint);
+    const path = `reschedule?${queryParams.toString()}`;
 
-    const res = await fetch(n8nEndpoint, {
+    const res = await fetchN8N(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
