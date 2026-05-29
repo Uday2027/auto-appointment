@@ -1,101 +1,8 @@
 import { NextResponse } from "next/server";
 
-const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "";
-const isMock = !N8N_URL || N8N_URL.includes("YOUR_N8N_BASE_URL");
-
-const mockData = {
-  appointments: [
-    {
-      id: "recMOCK001",
-      "Booking ID": "BK-2026-001",
-      "Patient Name": "Amina Rahman",
-      Email: "amina.rahman@email.com",
-      Phone: "+880 1711-000001",
-      "Appointment Date": new Date().toISOString().split("T")[0],
-      "Appointment Time": "09:30",
-      "Appointment Type": "New Consultation",
-      "Reason for Visit": "Frequent migraines, nausea, and minor dizziness during work hours.",
-      Status: "Confirmed",
-      Age: 28,
-      Gender: "Female",
-      Notes: "Patient reports sensitivity to bright screens.",
-      "Admin Notes": "",
-    },
-    {
-      id: "recMOCK002",
-      "Booking ID": "BK-2026-002",
-      "Patient Name": "Kariem Al-Fayed",
-      Email: "kariem.fayed@email.com",
-      Phone: "+880 1819-999888",
-      "Appointment Date": new Date().toISOString().split("T")[0],
-      "Appointment Time": "11:00",
-      "Appointment Type": "Report Review",
-      "Reason for Visit": "Post-op cardiology ultrasound review and lipid panel analysis.",
-      Status: "Confirmed",
-      Age: 45,
-      Gender: "Male",
-      Notes: "Bring previous ECG reports from Ibn Sina Diagnostic.",
-      "Admin Notes": "",
-    },
-    {
-      id: "recMOCK003",
-      "Booking ID": "BK-2026-003",
-      "Patient Name": "Nusrat Jahan",
-      Email: "jahan.parents@email.com",
-      Phone: "+880 1552-444333",
-      "Appointment Date": new Date().toISOString().split("T")[0],
-      "Appointment Time": "14:30",
-      "Appointment Type": "Emergency / Urgent",
-      "Reason for Visit": "Acute high fever (102F) and dry throat irritation since last night.",
-      Status: "Booked",
-      Age: 9,
-      Gender: "Female",
-      Notes: "Needs urgent pediatric consultation.",
-      "Admin Notes": "",
-    },
-    {
-      id: "recMOCK004",
-      "Booking ID": "BK-2026-004",
-      "Patient Name": "Sajid Ahmed",
-      Email: "sajid.ahmed@email.com",
-      Phone: "+880 1912-777666",
-      "Appointment Date": new Date().toISOString().split("T")[0],
-      "Appointment Time": "16:00",
-      "Appointment Type": "Follow-up",
-      "Reason for Visit": "Chronic hypertension prescription refill and blood pressure charting.",
-      Status: "Confirmed",
-      Age: 62,
-      Gender: "Male",
-      Notes: "BP logs saved on his personal digital watch tracker.",
-      "Admin Notes": "",
-    },
-    {
-      id: "recMOCK005",
-      "Booking ID": "BK-2026-005",
-      "Patient Name": "Tasnim Sultana",
-      Email: "tasnim.sultana@email.com",
-      Phone: "+880 1624-555666",
-      "Appointment Date": new Date().toISOString().split("T")[0],
-      "Appointment Time": "17:15",
-      "Appointment Type": "New Consultation",
-      "Reason for Visit": "Sore throat and dry cough symptoms.",
-      Status: "Cancelled",
-      Age: 34,
-      Gender: "Female",
-      Notes: "",
-      "Admin Notes": "",
-      "Cancellation Reason": "Symptom resolved, no longer needed."
-    }
-  ],
-  total: 5
-};
+const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "http://localhost:5678";
 
 export async function GET() {
-  if (isMock) {
-    await new Promise((r) => setTimeout(r, 600));
-    return NextResponse.json(mockData);
-  }
-
   try {
     const res = await fetch(`${N8N_URL}/webhook/admin/appointments`);
     if (!res.ok) throw new Error(`n8n returned status ${res.status}`);
@@ -113,7 +20,7 @@ export async function GET() {
   } catch (err) {
     console.error("[API /api/admin/appointments] n8n lookup failed:", err);
     return NextResponse.json(
-      { success: false, message: err instanceof Error ? err.message : "Network error" },
+      { success: false, message: err instanceof Error ? err.message : "Network error calling n8n webhook" },
       { status: 500 }
     );
   }

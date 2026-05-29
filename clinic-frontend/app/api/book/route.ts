@@ -1,24 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "";
-const isMock = !N8N_URL || N8N_URL.includes("YOUR_N8N_BASE_URL");
+const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "http://localhost:5678";
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  console.log("[API /api/book] received from frontend:", body);
-
-  if (isMock) {
-    console.log("[API /api/book] MOCK MODE — no n8n URL configured");
-    await new Promise((r) => setTimeout(r, 800));
-    const mockResponse = { success: true, message: "Appointment received (mock)" };
-    console.log("[API /api/book] mock response:", mockResponse);
-    return NextResponse.json(mockResponse);
-  }
-
-  const n8nEndpoint = `${N8N_URL}/webhook/new-booking`;
-  console.log("[API /api/book] forwarding to n8n:", n8nEndpoint);
-
   try {
+    const body = await req.json();
+    console.log("[API /api/book] received from frontend:", body);
+
+    const n8nEndpoint = `${N8N_URL}/webhook/new-booking`;
+    console.log("[API /api/book] forwarding to n8n:", n8nEndpoint);
+
     const res = await fetch(n8nEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -43,7 +34,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[API /api/book] error calling n8n:", err);
     return NextResponse.json(
-      { success: false, message: err instanceof Error ? err.message : "Network error" },
+      { success: false, message: err instanceof Error ? err.message : "Network error calling n8n webhook" },
       { status: 500 }
     );
   }

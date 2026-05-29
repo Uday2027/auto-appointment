@@ -1,20 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "";
-const isMock = !N8N_URL || N8N_URL.includes("YOUR_N8N_BASE_URL");
+const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || "http://localhost:5678";
 
 export async function POST(req: NextRequest) {
-  let doctors: any[] = [];
   try {
     const body = await req.json();
-    doctors = body.doctors || [];
     console.log("[API /api/availability] received:", body);
-
-    if (isMock) {
-      console.log("[API /api/availability] MOCK MODE");
-      await new Promise((r) => setTimeout(r, 600));
-      return NextResponse.json(getMockAvailability(doctors?.[0]?.id || ""));
-    }
 
     const n8nEndpoint = `${N8N_URL}/webhook-test/availability`;
     console.log("[API /api/availability] forwarding to n8n:", n8nEndpoint);
@@ -44,107 +35,10 @@ export async function POST(req: NextRequest) {
     console.log("[API /api/availability] n8n response:", data);
     return NextResponse.json(data);
   } catch (err) {
-    console.error("[API /api/availability] error calling n8n, using fallback mock:", err);
-    // Use the parsed doctors array cached from the try block to avoid re-reading the consumed request stream
-    return NextResponse.json(getMockAvailability(doctors?.[0]?.id || ""));
+    console.error("[API /api/availability] error calling n8n:", err);
+    return NextResponse.json(
+      { success: false, message: err instanceof Error ? err.message : "Network error calling n8n webhook" },
+      { status: 500 }
+    );
   }
-}
-
-function getMockAvailability(doctorId: string) {
-  const targetId = doctorId || "rec8HgQ3W2qDNmkp2";
-  return [
-    {
-      id: "rec1YiKEGA3CcNaqw",
-      createdTime: "2026-05-28T12:15:13.000Z",
-      fields: {
-        "Day of Week": "Thursday",
-        "Start Time": "09:00",
-        "End Time": "12:00",
-        "Availability Status": "Available",
-        "Doctor": [targetId],
-        "Availability Name": "Dr. Ayesha Rahman - Thursday",
-        "All Available Days": { state: "generated", value: "Thursday", isStale: false }
-      }
-    },
-    {
-      id: "recErSUyL4XWjyI2V",
-      createdTime: "2026-05-28T12:15:13.000Z",
-      fields: {
-        "Day of Week": "Sunday",
-        "Availability Status": "Not Available",
-        "Doctor": [targetId],
-        "Notes": "No clinic hours.",
-        "Availability Name": "Dr. Ayesha Rahman - Sunday",
-        "All Available Days": { state: "generated", value: "No available days found", isStale: false }
-      }
-    },
-    {
-      id: "recH24YuR9gV2aHVz",
-      createdTime: "2026-05-28T12:15:13.000Z",
-      fields: {
-        "Day of Week": "Wednesday",
-        "Start Time": "10:00",
-        "End Time": "13:00",
-        "Availability Status": "Available",
-        "Doctor": [targetId],
-        "Notes": "General practice hours.",
-        "Availability Name": "Dr. Ayesha Rahman - Wednesday",
-        "All Available Days": { state: "generated", value: "Wednesday", isStale: false }
-      }
-    },
-    {
-      id: "recKYQcjFVu0u2vhE",
-      createdTime: "2026-05-28T12:15:13.000Z",
-      fields: {
-        "Day of Week": "Saturday",
-        "Start Time": "10:00",
-        "End Time": "13:00",
-        "Availability Status": "Available",
-        "Doctor": [targetId],
-        "Notes": "Limited slots.",
-        "Availability Name": "Dr. Ayesha Rahman - Saturday",
-        "All Available Days": { state: "generated", value: "Saturday", isStale: false }
-      }
-    },
-    {
-      id: "recfCXwfdd8vdNvzH",
-      createdTime: "2026-05-28T12:15:13.000Z",
-      fields: {
-        "Day of Week": "Friday",
-        "Availability Status": "Not Available",
-        "Doctor": [targetId],
-        "Notes": "Clinic closed for administrative work.",
-        "Availability Name": "Dr. Ayesha Rahman - Friday",
-        "All Available Days": { state: "generated", value: "No available days found", isStale: false }
-      }
-    },
-    {
-      id: "recnAIG7ntJgx916l",
-      createdTime: "2026-05-28T12:15:13.000Z",
-      fields: {
-        "Day of Week": "Tuesday",
-        "Start Time": "14:00",
-        "End Time": "17:00",
-        "Availability Status": "Available",
-        "Doctor": [targetId],
-        "Notes": "Follow-up appointments only.",
-        "Availability Name": "Dr. Ayesha Rahman - Tuesday Afternoon",
-        "All Available Days": { state: "generated", value: "Tuesday", isStale: false }
-      }
-    },
-    {
-      id: "reczZuIO7EsLuU0yX",
-      createdTime: "2026-05-28T12:15:13.000Z",
-      fields: {
-        "Day of Week": "Monday",
-        "Start Time": "09:00",
-        "End Time": "12:00",
-        "Availability Status": "Available",
-        "Doctor": [targetId],
-        "Notes": "Available for new consultations.",
-        "Availability Name": "Dr. Ayesha Rahman - Monday Morning",
-        "All Available Days": { state: "generated", value: "Monday", isStale: false }
-      }
-    }
-  ];
 }
